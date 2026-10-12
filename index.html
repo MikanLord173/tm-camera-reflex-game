@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teachable Machine 反應力測試小遊戲</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- TensorFlow.js and Teachable Machine Image libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Outfit', 'Noto Sans TC', sans-serif;
+            background: radial-gradient(circle at center, #1e1b4b 0%, #0f172a 100%);
+            color: #f8fafc;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+        }
+
+        .glow-text-cyan {
+            text-shadow: 0 0 20px rgba(6, 182, 212, 0.6), 0 0 40px rgba(6, 182, 212, 0.3);
+        }
+
+        .glow-text-rose {
+            text-shadow: 0 0 20px rgba(244, 63, 94, 0.6), 0 0 40px rgba(244, 63, 94, 0.3);
+        }
+
+        .glow-text-amber {
+            text-shadow: 0 0 20px rgba(245, 158, 11, 0.6), 0 0 40px rgba(245, 158, 11, 0.3);
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        .pulse-animation {
+            animation: pulse-ring 2s infinite ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-12px); }
+            40%, 80% { transform: translateX(12px); }
+        }
+
+        .shake-effect {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen justify-between p-3 sm:p-6 relative select-none">
+
+    <!-- Background Ambient Glows -->
+    <div class="fixed top-1/4 left-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none -z-10"></div>
+    <div class="fixed bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl pointer-events-none -z-10"></div>
+
+    <!-- Top Header Bar -->
+    <header class="w-full max-w-6xl mx-auto flex justify-between items-center z-20 mb-4">
+        <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-indigo-600/30 border border-indigo-400/30 rounded-2xl flex items-center justify-center">
+                <i class="fa-solid fa-brain text-2xl text-indigo-400"></i>
+            </div>
+            <div>
+                <h1 class="text-xl sm:text-2xl font-black tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 via-cyan-300 to-white">
+                    HEAD REFLEX AI
+                </h1>
+                <p class="text-xs text-slate-400 hidden sm:block">Teachable Machine 反應力極限測試</p>
+            </div>
+        </div>
+
+        <!-- In-game Stats Bar -->
+        <div id="gameStatsHeader" class="hidden flex items-center gap-4 sm:gap-6 bg-slate-900/80 px-4 py-2 rounded-2xl border border-slate-700/60 shadow-lg">
+            <!-- Hearts -->
+            <div class="flex items-center gap-1 text-xl sm:text-2xl" id="livesContainer">
+                <i class="fa-solid fa-heart text-rose-500 transition-transform duration-300"></i>
+                <i class="fa-solid fa-heart text-rose-500 transition-transform duration-300"></i>
+                <i class="fa-solid fa-heart text-rose-500 transition-transform duration-300"></i>
+            </div>
+            <!-- Current Score -->
+            <div class="text-right">
+                <div class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">SCORE</div>
+                <div id="currentScore" class="text-lg sm:text-xl font-black text-amber-400">0</div>
+            </div>
+            <!-- High Score -->
+            <div class="text-right border-l border-slate-700/80 pl-4 hidden sm:block">
+                <div class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">BEST</div>
+                <div id="highScoreHeader" class="text-lg sm:text-xl font-black text-cyan-400">0</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="w-full max-w-6xl mx-auto my-auto relative z-10 flex flex-col items-center justify-center">
+
+        <!-- ==================================================== -->
+        <!-- SCREEN 1: START & CONFIGURATION SCREEN               -->
+        <!-- ==================================================== -->
+        <div id="setupScreen" class="w-full max-w-2xl glass-panel rounded-3xl p-6 sm:p-8 flex flex-col gap-6 transition-all duration-300">
+            <div class="text-center space-y-2">
+                <h2 class="text-2xl sm:text-3xl font-bold text-white">遊戲設定與模型導入</h2>
+                <p class="text-sm text-slate-300">用頭部動作用力挑戰極限反應！<span class="text-amber-400 font-bold">（注意：遊戲判定以「畫面上文字」說明為主）</span></p>
+            </div>
+
+            <!-- Model Selection Tabs -->
+            <div class="space-y-4">
+                <label class="block text-sm font-semibold text-slate-300">選擇模型來源：</label>
+                <div class="grid grid-cols-2 gap-3 p-1.5 bg-slate-900/60 rounded-2xl border border-slate-700/60">
+                    <button id="btnTabDefault" onclick="switchModelTab('default')" class="py-2.5 px-4 rounded-xl font-bold text-sm transition-all bg-indigo-600 text-white shadow-md">
+                        <i class="fa-solid fa-cube mr-2"></i>預設模型
+                    </button>
+                    <button id="btnTabCustom" onclick="switchModelTab('custom')" class="py-2.5 px-4 rounded-xl font-bold text-sm transition-all text-slate-400 hover:text-white">
+                        <i class="fa-solid fa-link mr-2"></i>自訂模型 URL
+                    </button>
+                </div>
+
+                <!-- Default Model Info Box -->
+                <div id="defaultModelBox" class="p-4 bg-indigo-950/40 border border-indigo-500/30 rounded-2xl text-xs sm:text-sm text-indigo-200 space-y-1">
+                    <div class="font-bold flex items-center gap-2 text-indigo-300">
+                        <i class="fa-solid fa-circle-check"></i> 使用預設 Teachable Machine 模型
+                    </div>
+                    <div class="text-xs text-slate-400 break-all">https://teachablemachine.withgoogle.com/models/bD9u-bQIOe/</div>
+                    <p class="text-xs text-slate-300 pt-1">包含標準類別：<span class="text-amber-300 font-mono font-semibold">Up, Down, Left, Right, Neutral</span></p>
+                </div>
+
+                <!-- Custom Model Input Box -->
+                <div id="customModelBox" class="hidden space-y-3">
+                    <div class="relative flex gap-2">
+                        <input type="text" id="customModelUrl" placeholder="https://teachablemachine.withgoogle.com/models/YOUR_MODEL_ID/" 
+                               class="w-full bg-slate-900/90 border border-slate-700 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-all" />
+                        <button onclick="verifyAndLoadCustomModel()" class="px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all whitespace-nowrap">
+                            驗證模型
+                        </button>
+                        <button onclick="reloadModel()" class="px-3 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-bold transition-all whitespace-nowrap" title="重新從雲端抓取模型檔">
+                            <i class="fa-solid fa-rotate mr-1"></i>重新載入
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-400">必須確保模型包含 5 種標籤 (不限大小寫)：<span class="text-indigo-300 font-mono">Up, Down, Left, Right, Neutral</span></p>
+                </div>
+
+                <!-- Verification Status Alert -->
+                <div id="modelStatusAlert" class="hidden p-3.5 rounded-2xl text-xs font-semibold flex items-center gap-2"></div>
+            </div>
+
+            <!-- Start Game / Test Button -->
+            <button id="btnStartGame" onclick="initAndLoadModelForTesting()" class="w-full py-4 bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-vial-circle-check mr-2"></i>載入模型並測試準確度
+            </button>
+        </div>
+
+        <!-- ==================================================== -->
+        <!-- SCREEN 1.5: MODEL ACCURACY TESTING SCREEN            -->
+        <!-- ==================================================== -->
+        <div id="testScreen" class="hidden w-full max-w-4xl glass-panel rounded-3xl p-6 sm:p-8 flex flex-col gap-6 transition-all duration-300">
+            <div class="flex justify-between items-center border-b border-slate-700/60 pb-4">
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-indigo-400"></i> 模型準確度測試與校正
+                    </h2>
+                    <p class="text-xs sm:text-sm text-slate-300">請嘗試做各個方向的動作，調校最適合您的判定門檻再開始遊戲！</p>
+                </div>
+                <button onclick="returnToSetupFromTest()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all">
+                    <i class="fa-solid fa-arrow-left mr-1"></i>重選模型
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <!-- Left: Live Webcam Display -->
+                <div class="lg:col-span-6 flex flex-col gap-3">
+                    <div class="relative w-full aspect-square bg-slate-950 rounded-2xl overflow-hidden border border-slate-700/80 flex items-center justify-center shadow-inner">
+                        <canvas id="testWebcamCanvas" class="w-full h-full object-cover"></canvas>
+                        
+                        <!-- Direction Detection Badge Overlay -->
+                        <div class="absolute bottom-3 left-3 right-3 bg-slate-900/90 backdrop-blur border border-slate-700 p-3 rounded-2xl flex items-center justify-between">
+                            <div class="text-xs font-bold text-slate-400 uppercase">即時判定結果</div>
+                            <div id="testDetectedBadge" class="text-base font-black text-amber-400 flex items-center gap-2">
+                                NEUTRAL
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Test Action Checklist -->
+                    <div class="bg-slate-900/60 border border-slate-800 p-3.5 rounded-2xl text-xs space-y-1.5">
+                        <div class="font-bold text-indigo-300">💡 建議測試步驟：</div>
+                        <div class="text-slate-300 flex items-center gap-2">
+                            <i class="fa-solid fa-check text-emerald-400 text-[10px]"></i> 分別做 <b>上、下、左、右、正中央</b> 動作
+                        </div>
+                        <div class="text-slate-300 flex items-center gap-2">
+                            <i class="fa-solid fa-check text-emerald-400 text-[10px]"></i> 確保動作時即時標籤能穩定反應
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Threshold Adjustment & Live Bars -->
+                <div class="lg:col-span-6 flex flex-col gap-5 justify-between h-full">
+                    
+                    <!-- Confidence Threshold Slider in Test Mode -->
+                    <div class="space-y-3 bg-indigo-950/40 p-4 rounded-2xl border border-indigo-500/30">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="font-bold text-indigo-200 flex items-center gap-2">
+                                <i class="fa-solid fa-gauge-high text-amber-400"></i> 判定信心度門檻
+                            </span>
+                            <span id="testThresholdValueText" class="font-black text-amber-400 text-lg">75%</span>
+                        </div>
+                        <input type="range" id="testThresholdSlider" min="50" max="95" step="5" value="75"
+                               oninput="updateTestThreshold(this.value)"
+                               class="w-full accent-indigo-500 cursor-pointer h-2.5 bg-slate-800 rounded-lg" />
+                        <div class="flex justify-between text-[11px] font-medium text-slate-400">
+                            <span>50% (極敏感 / 易誤判)</span>
+                            <span>95% (嚴格 / 須極標準)</span>
+                        </div>
+                    </div>
+
+                    <!-- Confidence Bars Breakdown (Test Screen) -->
+                    <div class="space-y-2 text-xs bg-slate-900/40 p-4 rounded-2xl border border-slate-800/80">
+                        <div class="text-[11px] font-bold text-slate-400 uppercase border-b border-slate-700/60 pb-2 mb-2">
+                            各方向機率即時監測 (Confidence)
+                        </div>
+
+                        <!-- UP Bar -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-slate-300 font-semibold">
+                                <span>UP (向上)</span>
+                                <span id="val-test-UP" class="font-mono text-slate-400">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="bar-test-UP" class="h-full bg-indigo-500 rounded-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+
+                        <!-- DOWN Bar -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-slate-300 font-semibold">
+                                <span>DOWN (向下)</span>
+                                <span id="val-test-DOWN" class="font-mono text-slate-400">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="bar-test-DOWN" class="h-full bg-indigo-500 rounded-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+
+                        <!-- LEFT Bar -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-slate-300 font-semibold">
+                                <span>LEFT (向左)</span>
+                                <span id="val-test-LEFT" class="font-mono text-slate-400">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="bar-test-LEFT" class="h-full bg-indigo-500 rounded-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT Bar -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-slate-300 font-semibold">
+                                <span>RIGHT (向右)</span>
+                                <span id="val-test-RIGHT" class="font-mono text-slate-400">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="bar-test-RIGHT" class="h-full bg-indigo-500 rounded-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+
+                        <!-- NEUTRAL Bar -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-slate-300 font-semibold">
+                                <span>NEUTRAL (正中)</span>
+                                <span id="val-test-NEUTRAL" class="font-mono text-slate-400">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="bar-test-NEUTRAL" class="h-full bg-emerald-500 rounded-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Confirm and Proceed Button -->
+                    <button onclick="startActualGameFromTest()" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-play"></i> 測試完畢，正式開始遊戲！
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================================================== -->
+        <!-- SCREEN 2: ACTIVE GAME PLAYING BOARD                  -->
+        <!-- ==================================================== -->
+        <div id="gamePlayBoard" class="hidden w-full flex flex-col lg:flex-row gap-6 items-stretch justify-center">
+
+            <!-- Center Main Reaction Canvas / Display Area -->
+            <div class="flex-1 glass-panel rounded-3xl p-6 sm:p-8 flex flex-col justify-between items-center relative min-h-[420px] overflow-hidden">
+                
+                <!-- Feedback Overlay Effects -->
+                <div id="feedbackFlash" class="absolute inset-0 pointer-events-none transition-opacity duration-300 opacity-0 z-20"></div>
+
+                <!-- Top Stage Banner -->
+                <div class="w-full flex justify-between items-center z-10">
+                    <div class="bg-indigo-950/80 border border-indigo-500/40 px-3.5 py-1.5 rounded-full text-xs font-bold text-indigo-300">
+                        STAGE <span id="stageNumber" class="text-amber-400 text-sm font-black">1</span>
+                    </div>
+                    <div id="stageRuleBadge" class="bg-slate-800/80 border border-slate-700 px-3 py-1 rounded-full text-xs text-slate-300 font-semibold">
+                        標準轉向
+                    </div>
+                </div>
+
+                <!-- Center Prompt Zone -->
+                <div id="promptCenterZone" class="my-auto text-center flex flex-col items-center justify-center space-y-4 z-10 w-full relative">
+                    
+                    <!-- Ready Countdown Banner -->
+                    <div id="readyCountdownBox" class="flex flex-col items-center space-y-2">
+                        <div id="countdownNumber" class="text-7xl sm:text-8xl font-black text-indigo-400 glow-text-cyan animate-bounce">
+                            READY
+                        </div>
+                        <p class="text-xs sm:text-sm text-slate-400">請保持頭部居中，準備應對指令！</p>
+                    </div>
+
+                    <!-- Instruction Box (Hidden initially) -->
+                    <div id="instructionBox" class="hidden flex flex-col items-center w-full transition-all duration-200">
+                        <!-- Dynamic Instruction Text -->
+                        <div id="instructionText" class="text-3xl sm:text-5xl font-black text-white tracking-wide drop-shadow-lg transition-all transform scale-100">
+                            往 <span class="text-amber-400">上</span> 看！
+                        </div>
+
+                        <!-- Big Dynamic Arrow Display -->
+                        <div id="bigArrowVisual" class="my-6 text-6xl sm:text-8xl text-indigo-400 transition-all duration-300 filter drop-shadow-[0_0_20px_rgba(99,102,241,0.5)]">
+                            <i class="fa-solid fa-circle-arrow-up"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reaction Progress Bar -->
+                <div class="w-full z-10 space-y-1">
+                    <div class="flex justify-between text-xs font-bold text-slate-400">
+                        <span>REACTION TIME</span>
+                        <span id="timerSecondsText">3.0s</span>
+                    </div>
+                    <div class="w-full h-3 bg-slate-900/80 rounded-full overflow-hidden border border-slate-700/60 p-0.5">
+                        <div id="reactionProgressBar" class="h-full bg-gradient-to-r from-emerald-400 via-amber-400 to-rose-500 rounded-full w-full transition-all duration-75"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Sidebar: Live Webcam & Current AI Detector Info -->
+            <div class="w-full lg:w-80 flex flex-col gap-4">
+                
+                <!-- Camera Feed Container -->
+                <div class="glass-panel rounded-3xl p-4 flex flex-col gap-3">
+                    <div class="flex justify-between items-center text-xs font-bold text-slate-300 border-b border-slate-700/60 pb-2">
+                        <span><i class="fa-solid fa-video text-indigo-400 mr-1.5"></i>即時鏡頭</span>
+                        <span class="text-emerald-400 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> AI ON
+                        </span>
+                    </div>
+
+                    <!-- Video Canvas Element -->
+                    <div class="relative w-full aspect-square bg-slate-950 rounded-2xl overflow-hidden border border-slate-700/80 flex items-center justify-center">
+                        <canvas id="webcamCanvas" class="w-full h-full object-cover"></canvas>
+                        
+                        <!-- Direction Detection Badge Overlay -->
+                        <div class="absolute bottom-3 left-3 right-3 bg-slate-900/90 backdrop-blur border border-slate-700 p-2.5 rounded-xl flex items-center justify-between">
+                            <div class="text-[11px] font-bold text-slate-400 uppercase">偵測結果</div>
+                            <div id="detectedLabelBadge" class="text-sm font-black text-amber-400 flex items-center gap-1.5">
+                                NEUTRAL
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Confidence Bars Breakdown -->
+                <div class="glass-panel rounded-3xl p-4 flex-1 flex flex-col justify-between">
+                    <div class="text-xs font-bold text-slate-400 uppercase mb-2 border-b border-slate-700/60 pb-2">
+                        各方向機率 (Confidence)
+                    </div>
+                    
+                    <div id="confidenceBarsContainer" class="space-y-2 text-xs">
+                        <!-- Up Bar -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-slate-300 font-semibold">
+                                <span>UP (向上)</span>
+                                <span id="val-UP" class="font-mono text-slate-400">0%</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="bar-UP" class="h-full bg-indigo-500 rounded-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+
+                        <!-- Down Bar -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-slate-300 font-semibold">
+                                <span>DOWN (向下)</span>
+                                <span id="val-DOWN" class="font-mono text-slate-400">0%</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="bar-DOWN" class="h-full bg-indigo-500 rounded-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+
+                        <!-- Left Bar -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-slate-300 font-semibold">
+                                <span>LEFT (向左)</span>
+                                <span id="val-LEFT" class="font-mono text-slate-400">0%</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="bar-LEFT" class="h-full bg-indigo-500 rounded-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+
+                        <!-- Right Bar -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-slate-300 font-semibold">
+                                <span>RIGHT (向右)</span>
+                                <span id="val-RIGHT" class="font-mono text-slate-400">0%</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="bar-RIGHT" class="h-full bg-indigo-500 rounded-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+
+                        <!-- Neutral Bar -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-slate-300 font-semibold">
+                                <span>NEUTRAL (正中)</span>
+                                <span id="val-NEUTRAL" class="font-mono text-slate-400">0%</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="bar-NEUTRAL" class="h-full bg-emerald-500 rounded-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ==================================================== -->
+    <!-- SCREEN 3: GAME OVER MODAL                            -->
+    <!-- ==================================================== -->
+    <div id="gameOverModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-panel max-w-md w-full rounded-3xl p-6 sm:p-8 text-center space-y-6 transform scale-95 transition-all animate-in fade-in zoom-in duration-200">
+            <div class="w-20 h-20 bg-rose-500/20 border border-rose-500/40 text-rose-500 rounded-full flex items-center justify-center mx-auto text-4xl shadow-lg shadow-rose-500/20">
+                <i class="fa-solid fa-skull"></i>
+            </div>
+
+            <div class="space-y-1">
+                <h3 class="text-3xl font-black text-white">GAME OVER</h3>
+                <p class="text-xs text-slate-400">生命數已耗盡，繼續保持練習提升反應力！</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 bg-slate-900/80 border border-slate-800 p-4 rounded-2xl">
+                <div>
+                    <div class="text-[10px] text-slate-400 uppercase font-bold">最終得分</div>
+                    <div id="finalScoreText" class="text-2xl font-black text-amber-400">0</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-slate-400 uppercase font-bold">最高關卡</div>
+                    <div id="finalStageText" class="text-2xl font-black text-indigo-400">Level 1</div>
+                </div>
+            </div>
+
+            <div id="newHighScoreAlert" class="hidden p-2.5 bg-amber-500/20 border border-amber-500/40 rounded-xl text-amber-300 text-xs font-bold flex items-center justify-center gap-2">
+                <i class="fa-solid fa-trophy text-amber-400"></i> 恭喜刷新最高分數紀錄！
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="restartGame()" class="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-sm shadow-lg transition-all">
+                    <i class="fa-solid fa-rotate-right mr-2"></i>再玩一次
+                </button>
+                <button onclick="returnToSetup()" class="px-4 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-bold text-sm transition-all">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Credit -->
+    <footer class="w-full text-center py-2 text-xs text-slate-500 z-10">
+        Teachable Machine Neural Detection Game &bull; Powered by TensorFlow.js
+    </footer>
+
+    <script>
+        // Default Model Teachable Machine Path
+        const DEFAULT_MODEL_URL = "https://teachablemachine.withgoogle.com/models/bD9u-bQIOe/";
+
+        // Standard Required Direction Categories
+        const REQUIRED_CLASSES = ["UP", "DOWN", "LEFT", "RIGHT", "NEUTRAL"];
+
+        // Direction Map for Arrows, FontAwesome Icons & Text
+        const DIRECTION_CONFIG = {
+            "UP": { label: "上", icon: "fa-circle-arrow-up", angle: 0 },
+            "DOWN": { label: "下", icon: "fa-circle-arrow-down", angle: 180 },
+            "LEFT": { label: "左", icon: "fa-circle-arrow-left", angle: 270 },
+            "RIGHT": { label: "右", icon: "fa-circle-arrow-right", angle: 90 },
+            "NEUTRAL": { label: "正中央", icon: "fa-bullseye", angle: 0 }
+        };
+
+        // Game State Variables
+        let model = null;
+        let webcam = null;
+        let activeModelUrl = DEFAULT_MODEL_URL;
+        let confidenceThreshold = 0.75;
+        
+        let gameState = "SETUP"; // SETUP, TESTING, PREPARING, PLAYING, GAME_OVER
+        let currentLives = 3;
+        let currentScore = 0;
+        let currentStage = 1;
+        let highScore = parseInt(localStorage.getItem('head_reflex_high_score') || '0');
+
+        // Dynamic Stage & Detection runtime variables
+        let rawClassPredictions = {};
+        let currentDetectedClass = "NEUTRAL";
+        let stageInstructionType = "LOOK_AT"; // LOOK_AT, DONT_LOOK_AT, HOLD_STILL
+        let targetDirection = "UP";
+        let displayArrowDirection = "UP";
+        let stageStartTime = 0;
+        let reactionTimeMax = 3.0;
+        let stageAnimationId = null;
+        let holdCorrectStartTime = null;
+        let holdWrongStartTime = null;
+
+        function switchModelTab(tabName) {
+            const btnDefault = document.getElementById('btnTabDefault');
+            const btnCustom = document.getElementById('btnTabCustom');
+            const defaultBox = document.getElementById('defaultModelBox');
+            const customBox = document.getElementById('customModelBox');
+
+            if (tabName === 'default') {
+                btnDefault.className = "py-2.5 px-4 rounded-xl font-bold text-sm transition-all bg-indigo-600 text-white shadow-md";
+                btnCustom.className = "py-2.5 px-4 rounded-xl font-bold text-sm transition-all text-slate-400 hover:text-white";
+                defaultBox.classList.remove('hidden');
+                customBox.classList.add('hidden');
+                activeModelUrl = DEFAULT_MODEL_URL;
+            } else {
+                btnCustom.className = "py-2.5 px-4 rounded-xl font-bold text-sm transition-all bg-indigo-600 text-white shadow-md";
+                btnDefault.className = "py-2.5 px-4 rounded-xl font-bold text-sm transition-all text-slate-400 hover:text-white";
+                customBox.classList.remove('hidden');
+                defaultBox.classList.add('hidden');
+            }
+        }
+
+        async function reloadModel() {
+            model = null;
+            showStatusAlert("正在重新載入模型...", "info");
+            const verified = await verifyAndLoadCustomModel();
+            if (verified) {
+                try {
+                    const modelPath = activeModelUrl + "model.json";
+                    const metadataPath = activeModelUrl + "metadata.json";
+                    model = await tmImage.load(modelPath, metadataPath);
+                    showStatusAlert("模型已成功重新載入！", "success");
+                } catch (e) {
+                    showStatusAlert("模型讀取失敗，請確認網址！", "error");
+                }
+            }
+        }
+
+        function updateTestThreshold(val) {
+            confidenceThreshold = parseFloat(val) / 100.0;
+            document.getElementById('testThresholdValueText').innerText = val + '%';
+        }
+
+        async function initAndLoadModelForTesting() {
+            const btnStart = document.getElementById('btnStartGame');
+
+            // If custom model selected but not yet verified, verify it first
+            if (document.getElementById('customModelBox').classList.contains('hidden') === false) {
+                const verified = await verifyAndLoadCustomModel();
+                if (!verified) return;
+            }
+
+            btnStart.disabled = true;
+            btnStart.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i>載入 AI 模型中...`;
+
+            try {
+                if (!activeModelUrl.endsWith('/')) {
+                    activeModelUrl += '/';
+                }
+
+                // Load TM Model if not loaded yet
+                if (!model) {
+                    const modelPath = activeModelUrl + "model.json";
+                    const metadataPath = activeModelUrl + "metadata.json";
+                    model = await tmImage.load(modelPath, metadataPath);
+                }
+
+                btnStart.innerHTML = `<i class="fa-solid fa-camera mr-2"></i>啟動攝影機...`;
+
+                // Setup Webcam (flip = false)
+                if (!webcam) {
+                    const flip = false;
+                    webcam = new tmImage.Webcam(300, 300, flip);
+                    await webcam.setup();
+                    await webcam.play();
+                }
+
+                // Switch UI to Testing Screen
+                document.getElementById('setupScreen').classList.add('hidden');
+                document.getElementById('testScreen').classList.remove('hidden');
+
+                gameState = "TESTING";
+
+                // Start AI prediction loop
+                window.requestAnimationFrame(webcamPredictLoop);
+
+            } catch (err) {
+                console.error(err);
+                alert("無法載入模型或啟動攝影機！請確定給予攝影機存取權限且網路連接正常。");
+                btnStart.disabled = false;
+                btnStart.innerHTML = `<i class="fa-solid fa-vial-circle-check mr-2"></i>載入模型並測試準確度`;
+            }
+        }
+
+        function startActualGameFromTest() {
+            document.getElementById('testScreen').classList.add('hidden');
+            document.getElementById('gamePlayBoard').classList.remove('hidden');
+            document.getElementById('gameStatsHeader').classList.remove('hidden');
+
+            resetGameValues();
+            startNextStage();
+        }
+
+        function returnToSetupFromTest() {
+            document.getElementById('testScreen').classList.add('hidden');
+            document.getElementById('setupScreen').classList.remove('hidden');
+            document.getElementById('btnStartGame').disabled = false;
+            document.getElementById('btnStartGame').innerHTML = `<i class="fa-solid fa-vial-circle-check mr-2"></i>載入模型並測試準確度`;
+            gameState = "SETUP";
+        }
+
+        async function webcamPredictLoop() {
+            if (webcam && webcam.canvas) {
+                webcam.update();
+                
+                // Choose active canvas depending on game state
+                const canvasId = gameState === "TESTING" ? 'testWebcamCanvas' : 'webcamCanvas';
+                const canvas = document.getElementById(canvasId);
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = webcam.canvas.width;
+                    canvas.height = webcam.canvas.height;
+                    ctx.drawImage(webcam.canvas, 0, 0);
+                }
+
+                // AI Prediction
+                const predictions = await model.predict(webcam.canvas);
+                
+                let highestProb = 0;
+                let topClass = "NEUTRAL";
+
+                predictions.forEach(p => {
+                    const normLabel = canonicalizeLabel(p.className);
+                    const prob = p.probability;
+                    rawClassPredictions[normLabel] = prob;
+
+                    const pct = Math.round(prob * 100);
+
+                    // Update Gameplay probability bars
+                    const bar = document.getElementById(`bar-${normLabel}`);
+                    const valText = document.getElementById(`val-${normLabel}`);
+                    if (bar && valText) {
+                        bar.style.width = `${pct}%`;
+                        valText.innerText = `${pct}%`;
+                    }
+
+                    // Update Test Screen probability bars
+                    const testBar = document.getElementById(`bar-test-${normLabel}`);
+                    const testValText = document.getElementById(`val-test-${normLabel}`);
+                    if (testBar && testValText) {
+                        testBar.style.width = `${pct}%`;
+                        testValText.innerText = `${pct}%`;
+                    }
+
+                    if (prob > highestProb) {
+                        highestProb = prob;
+                        topClass = normLabel;
+                    }
+                });
+
+                // Apply Threshold Logic
+                if (highestProb >= confidenceThreshold) {
+                    currentDetectedClass = topClass;
+                } else {
+                    currentDetectedClass = "NEUTRAL"; // Fallback if below threshold
+                }
+
+                // Update Detected Label Badge UI in both places
+                const cfg = DIRECTION_CONFIG[currentDetectedClass] || DIRECTION_CONFIG["NEUTRAL"];
+                
+                const gameBadge = document.getElementById('detectedLabelBadge');
+                if (gameBadge) {
+                    gameBadge.innerHTML = `<i class="fa-solid ${cfg.icon}"></i> ${currentDetectedClass} (${Math.round(highestProb * 100)}%)`;
+                }
+
+                const testBadge = document.getElementById('testDetectedBadge');
+                if (testBadge) {
+                    testBadge.innerHTML = `<i class="fa-solid ${cfg.icon}"></i> ${currentDetectedClass} (${Math.round(highestProb * 100)}%)`;
+                }
+
+                // Execute Game State Detection Logic
+                if (gameState === "PLAYING") {
+                    checkGameplayReactionState();
+                }
+            }
+
+            if (gameState === "TESTING" || gameState === "PREPARING" || gameState === "PLAYING") {
+                window.requestAnimationFrame(webcamPredictLoop);
+            }
+        }
+
+        async function verifyAndLoadCustomModel() {
+            const inputUrl = document.getElementById('customModelUrl').value.trim();
+            const statusAlert = document.getElementById('modelStatusAlert');
+
+            if (!inputUrl) {
+                showStatusAlert("請輸入有效的 Teachable Machine 模型 URL！", "error");
+                return false;
+            }
+
+            // Ensure URL ends with '/'
+            let formattedUrl = inputUrl.endsWith('/') ? inputUrl : inputUrl + '/';
+            const metadataUrl = formattedUrl + "metadata.json";
+
+            showStatusAlert("正在驗證模型結構與類別標籤...", "info");
+
+            try {
+                const response = await fetch(metadataUrl);
+                if (!response.ok) throw new Error("無法讀取 metadata.json");
+
+                const data = await response.json();
+                const labels = data.labels || [];
+                
+                // Case-insensitive normalization
+                const normalizedLabels = labels.map(l => canonicalizeLabel(l));
+                
+                // Check if all 5 required labels are included
+                const missing = REQUIRED_CLASSES.filter(req => !normalizedLabels.includes(req));
+
+                if (missing.length > 0) {
+                    showStatusAlert(`模型缺乏必要類別標籤：[${missing.join(', ')}]！請確認模型後重試。`, "error");
+                    return false;
+                }
+
+                activeModelUrl = formattedUrl;
+                showStatusAlert("模型驗證成功！包含 Up, Down, Left, Right, Neutral 所有類別。", "success");
+                return true;
+
+            } catch (err) {
+                console.error(err);
+                showStatusAlert("驗證失敗！無法存取模型 URL，請確定連結公開正確。", "error");
+                return false;
+            }
+        }
+
+        function canonicalizeLabel(label) {
+            if (!label) return "";
+            const l = label.trim().toUpperCase();
+            if (l.includes("UP")) return "UP";
+            if (l.includes("DOWN")) return "DOWN";
+            if (l.includes("LEFT")) return "LEFT";
+            if (l.includes("RIGHT")) return "RIGHT";
+            if (l.includes("NEUTRAL") || l.includes("CENTER") || l.includes("MIDDLE")) return "NEUTRAL";
+            return l;
+        }
+
+        function showStatusAlert(msg, type) {
+            const statusAlert = document.getElementById('modelStatusAlert');
+            statusAlert.classList.remove('hidden', 'bg-rose-500/20', 'text-rose-300', 'bg-emerald-500/20', 'text-emerald-300', 'bg-indigo-500/20', 'text-indigo-300');
+            
+            if (type === 'error') {
+                statusAlert.classList.add('bg-rose-500/20', 'text-rose-300', 'border', 'border-rose-500/40');
+                statusAlert.innerHTML = `<i class="fa-solid fa-circle-xmark text-rose-400"></i> ${msg}`;
+            } else if (type === 'success') {
+                statusAlert.classList.add('bg-emerald-500/20', 'text-emerald-300', 'border', 'border-emerald-500/40');
+                statusAlert.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> ${msg}`;
+            } else {
+                statusAlert.classList.add('bg-indigo-500/20', 'text-indigo-300', 'border', 'border-indigo-500/40');
+                statusAlert.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-indigo-400"></i> ${msg}`;
+            }
+        }
+
+        function resetGameValues() {
+            currentLives = 3;
+            currentScore = 0;
+            currentStage = 1;
+            updateLivesUI();
+            document.getElementById('currentScore').innerText = currentScore;
+        }
+
+        function startNextStage() {
+            gameState = "PREPARING";
+            holdCorrectStartTime = null;
+            holdWrongStartTime = null;
+
+            // Update Stage Number
+            document.getElementById('stageNumber').innerText = currentStage;
+
+            // Difficulty Curve Configuration
+            // L1~3: Standard, 3.0s reaction
+            // L4~6: Misleading Arrow + Text offset, 2.5s reaction
+            // L7~9: "DONT_LOOK_AT" Introduced, 2.0s reaction
+            // L10+: "HOLD_STILL" Introduced, 1.5s reaction
+            let prepCountdownTime = currentStage >= 10 ? 1.2 : 2.0;
+
+            if (currentStage <= 3) {
+                stageInstructionType = "LOOK_AT";
+                reactionTimeMax = Math.max(1.5, 3.2 - currentStage * 0.2);
+            } else if (currentStage <= 6) {
+                stageInstructionType = "LOOK_AT";
+                reactionTimeMax = Math.max(1.2, 2.8 - (currentStage - 3) * 0.2);
+            } else if (currentStage <= 9) {
+                stageInstructionType = Math.random() < 0.4 ? "DONT_LOOK_AT" : "LOOK_AT";
+                reactionTimeMax = Math.max(1.0, 2.3 - (currentStage - 6) * 0.15);
+            } else {
+                const rand = Math.random();
+                if (rand < 0.35) stageInstructionType = "HOLD_STILL";
+                else if (rand < 0.70) stageInstructionType = "DONT_LOOK_AT";
+                else stageInstructionType = "LOOK_AT";
+                reactionTimeMax = Math.max(0.9, 1.8 - (currentStage - 9) * 0.1);
+            }
+
+            // Pick Target Direction (Excluding NEUTRAL for LOOK/DONT_LOOK unless HOLD_STILL)
+            const directions = ["UP", "DOWN", "LEFT", "RIGHT"];
+            if (stageInstructionType === "HOLD_STILL") {
+                targetDirection = "NEUTRAL";
+                displayArrowDirection = "NEUTRAL";
+            } else {
+                targetDirection = directions[Math.floor(Math.random() * directions.length)];
+                
+                // Misleading Arrow Logic (Stage >= 4)
+                if (currentStage >= 4 && Math.random() < 0.5) {
+                    displayArrowDirection = directions[Math.floor(Math.random() * directions.length)];
+                } else {
+                    displayArrowDirection = targetDirection;
+                }
+            }
+
+            // Setup Rule Badge
+            const ruleBadge = document.getElementById('stageRuleBadge');
+            if (stageInstructionType === "HOLD_STILL") {
+                ruleBadge.innerText = "維持原方向！";
+                ruleBadge.className = "bg-purple-900/80 border border-purple-500/40 px-3 py-1 rounded-full text-xs text-purple-300 font-semibold";
+            } else if (stageInstructionType === "DONT_LOOK_AT") {
+                ruleBadge.innerText = "反向躲避！";
+                ruleBadge.className = "bg-rose-900/80 border border-rose-500/40 px-3 py-1 rounded-full text-xs text-rose-300 font-semibold";
+            } else if (displayArrowDirection !== targetDirection) {
+                ruleBadge.innerText = "箭頭干擾！";
+                ruleBadge.className = "bg-amber-900/80 border border-amber-500/40 px-3 py-1 rounded-full text-xs text-amber-300 font-semibold";
+            } else {
+                ruleBadge.innerText = "標準轉向";
+                ruleBadge.className = "bg-slate-800/80 border border-slate-700 px-3 py-1 rounded-full text-xs text-slate-300 font-semibold";
+            }
+
+            // Hide Instruction, Show Countdown Box
+            document.getElementById('instructionBox').classList.add('hidden');
+            document.getElementById('readyCountdownBox').classList.remove('hidden');
+
+            let countdownVal = Math.ceil(prepCountdownTime);
+            const countdownEl = document.getElementById('countdownNumber');
+            countdownEl.innerText = countdownVal;
+
+            let countdownTimer = setInterval(() => {
+                countdownVal--;
+                if (countdownVal > 0) {
+                    countdownEl.innerText = countdownVal;
+                } else {
+                    clearInterval(countdownTimer);
+                    launchStageInstruction();
+                }
+            }, (prepCountdownTime * 1000) / countdownVal);
+        }
+
+        function launchStageInstruction() {
+            gameState = "PLAYING";
+            stageStartTime = performance.now();
+
+            document.getElementById('readyCountdownBox').classList.add('hidden');
+            const instructionBox = document.getElementById('instructionBox');
+            instructionBox.classList.remove('hidden');
+
+            const textEl = document.getElementById('instructionText');
+            const arrowEl = document.getElementById('bigArrowVisual');
+
+            // Render Instruction Text & Arrow
+            const targetCfg = DIRECTION_CONFIG[targetDirection];
+            const arrowCfg = DIRECTION_CONFIG[displayArrowDirection];
+
+            if (stageInstructionType === "LOOK_AT") {
+                textEl.innerHTML = `往 <span class="text-amber-400 glow-text-amber">${targetCfg.label}</span> 看！`;
+            } else if (stageInstructionType === "DONT_LOOK_AT") {
+                // Keep target direction text in amber color (same as LOOK_AT) for misleading effect
+                textEl.innerHTML = `別往 <span class="text-amber-400 glow-text-amber">${targetCfg.label}</span> 看！`;
+            } else if (stageInstructionType === "HOLD_STILL") {
+                textEl.innerHTML = `<span class="text-indigo-300 glow-text-cyan">維持正中央方向！</span>`;
+            }
+
+            // Random Text Offset for Level >= 5
+            if (currentStage >= 5 && stageInstructionType !== "HOLD_STILL") {
+                const randomX = (Math.random() - 0.5) * 40; // -20px to 20px
+                const randomY = (Math.random() - 0.5) * 30;
+                textEl.style.transform = `translate(${randomX}px, ${randomY}px)`;
+            } else {
+                textEl.style.transform = `translate(0px, 0px)`;
+            }
+
+            // Configure Big Arrow Icon
+            arrowEl.innerHTML = `<i class="fa-solid ${arrowCfg.icon}"></i>`;
+            if (displayArrowDirection === "NEUTRAL") {
+                arrowEl.className = "my-6 text-6xl sm:text-8xl text-purple-400 transition-all duration-300";
+            } else {
+                arrowEl.className = "my-6 text-6xl sm:text-8xl text-indigo-400 transition-all duration-300 filter drop-shadow-[0_0_20px_rgba(99,102,241,0.5)]";
+            }
+
+            // Start Progress Animation Loop
+            if (stageAnimationId) cancelAnimationFrame(stageAnimationId);
+            runTimerProgressBar();
+        }
+
+        function runTimerProgressBar() {
+            if (gameState !== "PLAYING") return;
+
+            const now = performance.now();
+            const elapsed = (now - stageStartTime) / 1000.0;
+            const remaining = Math.max(0, reactionTimeMax - elapsed);
+            const pct = (remaining / reactionTimeMax) * 100;
+
+            document.getElementById('reactionProgressBar').style.width = `${pct}%`;
+            document.getElementById('timerSecondsText').innerText = `${remaining.toFixed(1)}s`;
+
+            if (remaining <= 0) {
+                // Time Expired -> Failed
+                triggerFailure("時間到！反應太慢");
+                return;
+            }
+
+            stageAnimationId = requestAnimationFrame(runTimerProgressBar);
+        }
+
+        function checkGameplayReactionState() {
+            const now = performance.now();
+
+            let isCorrectCondition = false;
+            let isWrongCondition = false;
+
+            if (stageInstructionType === "LOOK_AT") {
+                // Correct if detected == targetDirection
+                if (currentDetectedClass === targetDirection) {
+                    isCorrectCondition = true;
+                } else if (currentDetectedClass !== "NEUTRAL" && currentDetectedClass !== targetDirection) {
+                    // Turn to wrong direction (non-Neutral)
+                    isWrongCondition = true;
+                }
+            } else if (stageInstructionType === "DONT_LOOK_AT") {
+                // Correct if player turns to ANY non-Neutral direction EXCEPT targetDirection
+                if (currentDetectedClass !== "NEUTRAL" && currentDetectedClass !== targetDirection) {
+                    isCorrectCondition = true;
+                } else if (currentDetectedClass === targetDirection) {
+                    // Turned to forbidden direction!
+                    isWrongCondition = true;
+                }
+            } else if (stageInstructionType === "HOLD_STILL") {
+                // Correct if staying NEUTRAL
+                if (currentDetectedClass === "NEUTRAL") {
+                    isCorrectCondition = true;
+                } else {
+                    // Moved away from center!
+                    isWrongCondition = true;
+                }
+            }
+
+            // Tolerance Timer Rules:
+            // Must sustain correct direction for 150ms to win stage.
+            if (isCorrectCondition) {
+                if (!holdCorrectStartTime) holdCorrectStartTime = now;
+                if (now - holdCorrectStartTime >= 150) {
+                    triggerStageSuccess();
+                    return;
+                }
+            } else {
+                holdCorrectStartTime = null;
+            }
+
+            // Must sustain wrong direction for 200ms to trigger penalty.
+            if (isWrongCondition) {
+                if (!holdWrongStartTime) holdWrongStartTime = now;
+                if (now - holdWrongStartTime >= 200) {
+                    triggerFailure("方向錯誤！");
+                    return;
+                }
+            } else {
+                holdWrongStartTime = null;
+            }
+        }
+
+        function triggerStageSuccess() {
+            gameState = "CHECK_SUCCESS";
+            if (stageAnimationId) cancelAnimationFrame(stageAnimationId);
+
+            // Calculate Score: Level base score + remaining time bonus
+            const elapsed = (performance.now() - stageStartTime) / 1000.0;
+            const remainingTime = Math.max(0, reactionTimeMax - elapsed);
+            const stageBaseScore = currentStage * 100;
+            const timeBonus = Math.round(remainingTime * 50);
+            const gainedScore = stageBaseScore + timeBonus;
+
+            currentScore += gainedScore;
+            document.getElementById('currentScore').innerText = currentScore;
+
+            // Flash Visual Green Feedback
+            flashFeedbackOverlay("bg-emerald-500/30");
+
+            // Advance Stage immediately
+            currentStage++;
+            startNextStage();
+        }
+
+        function triggerFailure(reason) {
+            gameState = "CHECK_SUCCESS";
+            if (stageAnimationId) cancelAnimationFrame(stageAnimationId);
+
+            // Deduct 1 Heart Life
+            currentLives--;
+            updateLivesUI();
+
+            // Flash Visual Red Feedback & Shake Effect
+            flashFeedbackOverlay("bg-rose-500/40");
+            const board = document.getElementById('promptCenterZone');
+            board.classList.add('shake-effect');
+            setTimeout(() => board.classList.remove('shake-effect'), 500);
+
+            if (currentLives <= 0) {
+                handleGameOver();
+            } else {
+                // Continue to next stage immediately
+                currentStage++;
+                startNextStage();
+            }
+        }
+
+        function flashFeedbackOverlay(colorClass) {
+            const flash = document.getElementById('feedbackFlash');
+            flash.className = `absolute inset-0 pointer-events-none transition-opacity duration-300 z-20 ${colorClass} opacity-100`;
+            setTimeout(() => {
+                flash.classList.remove('opacity-100');
+                flash.classList.add('opacity-0');
+            }, 300);
+        }
+
+        function updateLivesUI() {
+            const container = document.getElementById('livesContainer');
+            let html = "";
+            for (let i = 0; i < 3; i++) {
+                if (i < currentLives) {
+                    html += `<i class="fa-solid fa-heart text-rose-500 transition-transform duration-300"></i>`;
+                } else {
+                    html += `<i class="fa-regular fa-heart text-slate-600"></i>`;
+                }
+            }
+            container.innerHTML = html;
+        }
+
+        function handleGameOver() {
+            gameState = "GAME_OVER";
+            if (stageAnimationId) cancelAnimationFrame(stageAnimationId);
+
+            let isNewHigh = false;
+            if (currentScore > highScore) {
+                highScore = currentScore;
+                localStorage.setItem('head_reflex_high_score', highScore.toString());
+                document.getElementById('highScoreHeader').innerText = highScore;
+                isNewHigh = true;
+            }
+
+            document.getElementById('finalScoreText').innerText = currentScore;
+            document.getElementById('finalStageText').innerText = `Level ${currentStage}`;
+
+            const newHighAlert = document.getElementById('newHighScoreAlert');
+            if (isNewHigh) newHighAlert.classList.remove('hidden');
+            else newHighAlert.classList.add('hidden');
+
+            document.getElementById('gameOverModal').classList.remove('hidden');
+        }
+
+        function restartGame() {
+            document.getElementById('gameOverModal').classList.add('hidden');
+            resetGameValues();
+            startNextStage();
+        }
+
+        function returnToSetup() {
+            document.getElementById('gameOverModal').classList.add('hidden');
+            document.getElementById('gamePlayBoard').classList.add('hidden');
+            document.getElementById('gameStatsHeader').classList.add('hidden');
+            document.getElementById('testScreen').classList.add('hidden');
+            document.getElementById('setupScreen').classList.remove('hidden');
+            document.getElementById('btnStartGame').disabled = false;
+            document.getElementById('btnStartGame').innerHTML = `<i class="fa-solid fa-vial-circle-check mr-2"></i>載入模型並測試準確度`;
+            gameState = "SETUP";
+        }
+    </script>
+</body>
+</html>
